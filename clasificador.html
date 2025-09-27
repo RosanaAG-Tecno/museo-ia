@@ -31,7 +31,6 @@
   <div id="label-container"></div>
 
   <script>
-    // TU MODELO (nuevo)
     const MODEL_URL = "https://teachablemachine.withgoogle.com/models/Szu6OpDzw/";
     let model, webcam, labels;
 
@@ -49,8 +48,8 @@
         alert("✅ Modelo cargado correctamente");
       }catch(e){
         console.error(e);
-        setStatus("❌ Error al cargar el modelo");
-        alert("❌ No se pudo cargar el modelo. Revisa la URL.");
+        setStatus("❌ Error al cargar el modelo (revisa la URL).");
+        alert("❌ Error al cargar el modelo.");
       }
     }
 
@@ -80,7 +79,7 @@
     }
 
     async function predict(input){
-      const res = await model.predict(input, false); // [{className, probability}, ...]
+      const res = await model.predict(input, false);
       res.sort((a,b)=>b.probability-a.probability);
       for(let i=0;i<res.length;i++){
         labels.childNodes[i].textContent =
