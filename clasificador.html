@@ -18,7 +18,7 @@
   <p>Este visor carga el modelo entrenado en Teachable Machine y devuelve las probabilidades.</p>
 
   <button type="button" onclick="init()">Cargar modelo</button>
-  <input type="file" accept="image/*" onchange="predictFromFile(event)">
+  <input id="fileInput" type="file" accept="image/*" onchange="predictFromFile(event)">
   <button type="button" onclick="initWebcam()">Usar cámara</button>
 
   <div id="webcam-container"></div>
@@ -26,40 +26,40 @@
   <div id="label-container"></div>
 
   <script>
-    // ⚠️ Carpeta correcta con tu modelo en GitHub
-    const URL = "https://rosanaag-tecno.github.io/museo-ia/model/";
+    // Carpeta correcta de tu modelo en GitHub
+    const MODEL_URL = "https://rosanaag-tecno.github.io/museo-ia/model/";
     let model, webcam, labelContainer, maxPredictions;
 
-    // Inicializar el modelo
     async function init() {
-      const modelURL = URL + "model.json";
-      const metadataURL = URL + "metadata.json";
+      try {
+        const modelURL = MODEL_URL + "model.json";
+        const metadataURL = MODEL_URL + "metadata.json";
+        model = await tmImage.load(modelURL, metadataURL);
+        maxPredictions = model.getTotalClasses();
 
-      model = await tmImage.load(modelURL, metadataURL);
-      maxPredictions = model.getTotalClasses();
-
-      labelContainer = document.getElementById("label-container");
-      labelContainer.innerHTML = "";
-      for (let i = 0; i < maxPredictions; i++) {
-        labelContainer.appendChild(document.createElement("div"));
+        labelContainer = document.getElementById("label-container");
+        labelContainer.innerHTML = "";
+        for (let i = 0; i < maxPredictions; i++) {
+          labelContainer.appendChild(document.createElement("div"));
+        }
+        alert("✅ Modelo cargado correctamente");
+      } catch (e) {
+        console.error("Error cargando modelo:", e);
+        alert("❌ Error al cargar el modelo. Revisa que existan model.json, metadata.json y weights.bin en /model/");
       }
-      alert("✅ Modelo cargado correctamente");
     }
 
-    // Usar la cámara
     async function initWebcam() {
-      if (!model) {
-        alert("Primero carga el modelo");
-        return;
-      }
+      if (!model) { alert("Primero carga el modelo"); return; }
       const flip = true;
       webcam = new tmImage.Webcam(300, 300, flip);
       await webcam.setup();
       await webcam.play();
       window.requestAnimationFrame(loop);
 
-      document.getElementById("webcam-container").innerHTML = "";
-      document.getElementById("webcam-container").appendChild(webcam.canvas);
+      const cont = document.getElementById("webcam-container");
+      cont.innerHTML = "";
+      cont.appendChild(webcam.canvas);
     }
 
     async function loop() {
@@ -68,27 +68,19 @@
       window.requestAnimationFrame(loop);
     }
 
-    // Predecir con imagen subida
     async function predictFromFile(event) {
-      if (!model) {
-        alert("Primero carga el modelo");
-        return;
-      }
+      if (!model) { alert("Primero carga el modelo"); return; }
       const image = document.getElementById("image-preview");
-      image.src = URL.createObjectURL(event.target.files[0]);
+      image.src = (window.URL || window.webkitURL).createObjectURL(event.target.files[0]);
       image.style.display = "block";
-      image.onload = async () => {
-        await predict(image);
-      };
+      image.onload = async () => { await predict(image); };
     }
 
-    // Hacer predicción
     async function predict(input) {
-      const prediction = await model.predict(input, false);
-      for (let i = 0; i < maxPredictions; i++) {
-        const classPrediction =
-          prediction[i].className + ": " + (prediction[i].probability * 100).toFixed(2) + "%";
-        labelContainer.childNodes[i].innerHTML = classPrediction;
+      const preds = await model.predict(input, false);
+      for (let i = 0; i < preds.length; i++) {
+        labelContainer.childNodes[i].innerHTML =
+          `${preds[i].className}: ${(preds[i].probability * 100).toFixed(2)}%`;
       }
     }
   </script>
