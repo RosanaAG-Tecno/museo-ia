@@ -1,86 +1,90 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Clasificador de piezas (Teachable Machine)</title>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    h1 { color: #333; }
-    #webcam-container, #image-preview { margin-top: 20px; }
-    #label-container div { margin: 5px 0; }
-    button { margin: 5px; padding: 10px; }
+    body{font-family:system-ui,Arial,sans-serif;margin:20px}
+    button{padding:10px 14px;margin:6px}
+    #label-container div{margin:4px 0}
+    #status{opacity:.7}
+    img{max-width:320px;display:none;margin-top:10px}
   </style>
 </head>
 <body>
   <h1>Clasificador de piezas (Teachable Machine)</h1>
-  <p>Este visor carga el modelo entrenado en Teachable Machine y devuelve las probabilidades.</p>
+  <p id="status">Listo. Primero pulsa “Cargar modelo”.</p>
 
-  <button type="button" onclick="init()">Cargar modelo</button>
-  <input id="fileInput" type="file" accept="image/*" onchange="predictFromFile(event)">
-  <button type="button" onclick="initWebcam()">Usar cámara</button>
+  <div>
+    <button onclick="init()">Cargar modelo</button>
+    <button onclick="document.getElementById('file').click()">Elegir archivo</button>
+    <input id="file" type="file" accept="image/*" style="display:none" onchange="predictFromFile(event)">
+    <button onclick="initWebcam()">Usar cámara</button>
+  </div>
 
-  <div id="webcam-container"></div>
-  <img id="image-preview" width="300" style="display:none;">
+  <img id="img" alt="Vista previa">
+  <div id="webcam-container" style="margin-top:10px"></div>
+  <h3>Resultados</h3>
   <div id="label-container"></div>
 
   <script>
-    // Carpeta correcta de tu modelo en GitHub
-    const MODEL_URL = "https://rosanaag-tecno.github.io/museo-ia/model/";
-    let model, webcam, labelContainer, maxPredictions;
+    // TU MODELO (nuevo)
+    const MODEL_URL = "https://teachablemachine.withgoogle.com/models/Szu6OpDzw/";
+    let model, webcam, labels;
 
-    async function init() {
-      try {
-        const modelURL = MODEL_URL + "model.json";
-        const metadataURL = MODEL_URL + "metadata.json";
-        model = await tmImage.load(modelURL, metadataURL);
-        maxPredictions = model.getTotalClasses();
+    function setStatus(t){ document.getElementById("status").textContent = t; }
 
-        labelContainer = document.getElementById("label-container");
-        labelContainer.innerHTML = "";
-        for (let i = 0; i < maxPredictions; i++) {
-          labelContainer.appendChild(document.createElement("div"));
-        }
+    async function init(){
+      try{
+        setStatus("Cargando modelo…");
+        model = await tmImage.load(MODEL_URL + "model.json", MODEL_URL + "metadata.json");
+        const total = model.getTotalClasses();
+        labels = document.getElementById("label-container");
+        labels.innerHTML = "";
+        for (let i=0;i<total;i++) labels.appendChild(document.createElement("div"));
+        setStatus("✅ Modelo cargado");
         alert("✅ Modelo cargado correctamente");
-      } catch (e) {
-        console.error("Error cargando modelo:", e);
-        alert("❌ Error al cargar el modelo. Revisa que existan model.json, metadata.json y weights.bin en /model/");
+      }catch(e){
+        console.error(e);
+        setStatus("❌ Error al cargar el modelo");
+        alert("❌ No se pudo cargar el modelo. Revisa la URL.");
       }
     }
 
-    async function initWebcam() {
-      if (!model) { alert("Primero carga el modelo"); return; }
+    async function initWebcam(){
+      if(!model){ alert("Primero carga el modelo"); return; }
       const flip = true;
-      webcam = new tmImage.Webcam(300, 300, flip);
+      webcam = new tmImage.Webcam(320, 320, flip);
       await webcam.setup();
       await webcam.play();
+      document.getElementById("webcam-container").innerHTML = "";
+      document.getElementById("webcam-container").appendChild(webcam.canvas);
       window.requestAnimationFrame(loop);
-
-      const cont = document.getElementById("webcam-container");
-      cont.innerHTML = "";
-      cont.appendChild(webcam.canvas);
     }
 
-    async function loop() {
+    async function loop(){
       webcam.update();
       await predict(webcam.canvas);
       window.requestAnimationFrame(loop);
     }
 
-    async function predictFromFile(event) {
-      if (!model) { alert("Primero carga el modelo"); return; }
-      const image = document.getElementById("image-preview");
-      image.src = (window.URL || window.webkitURL).createObjectURL(event.target.files[0]);
-      image.style.display = "block";
-      image.onload = async () => { await predict(image); };
+    async function predictFromFile(ev){
+      if(!model){ alert("Primero carga el modelo"); return; }
+      const img = document.getElementById("img");
+      img.src = (window.URL||window.webkitURL).createObjectURL(ev.target.files[0]);
+      img.style.display = "block";
+      img.onload = ()=>predict(img);
     }
 
-    async function predict(input) {
-      const preds = await model.predict(input, false);
-      for (let i = 0; i < preds.length; i++) {
-        labelContainer.childNodes[i].innerHTML =
-          `${preds[i].className}: ${(preds[i].probability * 100).toFixed(2)}%`;
+    async function predict(input){
+      const res = await model.predict(input, false); // [{className, probability}, ...]
+      res.sort((a,b)=>b.probability-a.probability);
+      for(let i=0;i<res.length;i++){
+        labels.childNodes[i].textContent =
+          `${res[i].className}: ${(res[i].probability*100).toFixed(2)}%`;
       }
     }
   </script>
