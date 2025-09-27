@@ -11,10 +11,8 @@
     .card { border: 1px solid #ccc; border-radius: 12px; padding: 12px; }
     .muted { opacity: .7; font-size: .9rem; }
     button { padding: 10px 14px; border-radius: 10px; border: 1px solid #ccc; background: #f5f5f5; cursor: pointer; }
-    ul { margin: 0; padding-left: 18px; }
-    li { margin: 4px 0; }
     .hidden { display: none; }
-    .bar { height: 8px; background: #ddd; border-radius: 6px; overflow: hidden; }
+    .bar { height: 8px; background: #ddd; border-radius: 6px; overflow: hidden; margin: 4px 0 10px; }
     .fill { height: 100%; background: #999; width: 0; }
     .kq { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: center; }
   </style>
@@ -23,8 +21,6 @@
   <h1 style="margin-top:0">Clasificador de piezas (Teachable Machine)</h1>
   <p class="muted">Este visor carga el modelo de Teachable Machine y devuelve las probabilidades.</p>
 
-  <!-- Controles visibles (útiles para depurar en navegador). 
-       En App Inventor puedes dispararlos con EvaluateJavaScript('abrirArchivo()' / 'abrirCamara()'). -->
   <div class="row" style="margin-bottom:12px">
     <button onclick="abrirArchivo()">Elegir imagen</button>
     <button onclick="abrirCamara()">Hacer foto</button>
@@ -46,24 +42,26 @@
   <input id="pick" class="hidden" type="file" accept="image/*" />
   <input id="cam"  class="hidden" type="file" accept="image/*" capture="environment" />
 
-  <script type="module">
-    import * as tmImage from "https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.esm.js";
+  <!-- Librería Teachable Machine (modo clásico, no ES modules) -->
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
 
-    const URL = "https://teachablemachine.withgoogle.com/models/CvJ9-vGZC/";
-    let model, maxPredictions = 0;
-    const img = document.getElementById('vista');
+  <script>
+    // URL de tu modelo (termina en /)
+    const MODEL_URL = "https://teachablemachine.withgoogle.com/models/CvJ9-vGZC/";
+
+    let model;
+    const img    = document.getElementById('vista');
     const estado = document.getElementById('estado');
-    const lista = document.getElementById('lista');
-    const pick = document.getElementById('pick');
-    const cam  = document.getElementById('cam');
+    const lista  = document.getElementById('lista');
+    const pick   = document.getElementById('pick');
+    const cam    = document.getElementById('cam');
 
     async function cargarModelo() {
       try {
-        model = await tmImage.load(URL + "model.json", URL + "metadata.json");
-        maxPredictions = model.getTotalClasses?.() ?? 0;
+        model = await tmImage.load(MODEL_URL + "model.json", MODEL_URL + "metadata.json");
         estado.textContent = "Modelo cargado ✔";
       } catch (e) {
-        console.error(e);
+        console.error("Error cargando modelo:", e);
         estado.textContent = "Error al cargar el modelo";
       }
     }
@@ -75,19 +73,16 @@
 
     async function cargarArchivo(file) {
       if (!file) return;
-      const url = URL.createObjectURL(file);
-      img.src = url;
-      try {
-        await img.decode?.();
-      } catch {}
+      const objUrl = (window.URL || window.webkitURL).createObjectURL(file);
+      img.src = objUrl;
+      try { if (img.decode) await img.decode(); } catch {}
       predecir(img);
     }
 
-    pick.addEventListener('change', e => cargarArchivo(e.target.files?.[0]));
-    cam.addEventListener('change',  e => cargarArchivo(e.target.files?.[0]));
+    pick.addEventListener('change', e => cargarArchivo(e.target.files && e.target.files[0]));
+    cam .addEventListener('change', e => cargarArchivo(e.target.files && e.target.files[0]));
 
     function pintarResultados(items) {
-      // items: [{clase, porcentaje}]
       lista.innerHTML = "";
       items.forEach(it => {
         const name = document.createElement('div');
@@ -114,29 +109,31 @@
       if (!model) return;
 
       estado.textContent = "Clasificando…";
-      const preds = await model.predict(element);
-      preds.sort((a,b) => b.probability - a.probability);
-
-      const out = preds.map(p => ({
-        clase: p.className,
-        porcentaje: +(p.probability * 100).toFixed(1)
-      }));
-
-      pintarResultados(out);
-      estado.textContent = "Listo";
-
-      // Enviar a App Inventor (si existe)
       try {
-        if (window.AppInventor?.setWebViewString) {
-          window.AppInventor.setWebViewString(JSON.stringify({
-            type: "predicciones",
-            items: out
-          }));
-        }
-      } catch {}
+        const preds = await model.predict(element); // [{className, probability}, ...]
+        preds.sort((a,b) => b.probability - a.probability);
+
+        const out = preds.map(p => ({
+          clase: p.className,
+          porcentaje: +(p.probability * 100).toFixed(1)
+        }));
+
+        pintarResultados(out);
+        estado.textContent = "Listo";
+
+        // Enviar resultados a App Inventor (si se usa dentro de WebViewer)
+        try {
+          if (window.AppInventor && window.AppInventor.setWebViewString) {
+            window.AppInventor.setWebViewString(JSON.stringify({ type: "predicciones", items: out }));
+          }
+        } catch {}
+      } catch (e) {
+        console.error("Error clasificando:", e);
+        estado.textContent = "Error al clasificar";
+      }
     }
 
-    // Carga el modelo al iniciar
+    // Iniciar
     cargarModelo();
   </script>
 </body>
